@@ -12,9 +12,16 @@ interface PrinterQueueWidgetProps {
   printerModel?: string | null;
   printerState?: string | null;
   plateCleared?: boolean;
+  autoClearEnabled?: boolean;
 }
 
-export function PrinterQueueWidget({ printerId, printerModel, printerState, plateCleared }: PrinterQueueWidgetProps) {
+export function PrinterQueueWidget({
+  printerId,
+  printerModel,
+  printerState,
+  plateCleared,
+  autoClearEnabled,
+}: PrinterQueueWidgetProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -54,7 +61,9 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
           <div className="min-w-0 flex-1">
             <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
             <p className="text-sm text-white truncate">
-              {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
+              {nextItem?.archive_name ||
+                nextItem?.library_file_name ||
+                `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
           </div>
           {totalPending > 1 && (
@@ -63,7 +72,12 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
             </span>
           )}
         </div>
-        {clearPlateMutation.isSuccess ? (
+        {autoClearEnabled ? (
+          <div className="w-full py-2 px-3 rounded-lg bg-bambu-green/10 border border-bambu-green/20 text-bambu-green text-sm flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Auto-clean is on, starting next print...
+          </div>
+        ) : clearPlateMutation.isSuccess ? (
           <div className="w-full py-2 px-3 rounded-lg bg-bambu-green/10 border border-bambu-green/20 text-bambu-green text-sm flex items-center justify-center gap-2">
             <CircleCheck className="w-4 h-4" />
             {t('queue.plateReady')}
@@ -97,7 +111,9 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
           <div className="min-w-0 flex-1">
             <p className="text-xs text-bambu-gray">{t('queue.nextInQueue')}</p>
             <p className="text-sm text-white truncate">
-              {nextItem?.archive_name || nextItem?.library_file_name || `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
+              {nextItem?.archive_name ||
+                nextItem?.library_file_name ||
+                `File #${nextItem?.archive_id || nextItem?.library_file_id}`}
             </p>
           </div>
         </div>
@@ -107,9 +123,7 @@ export function PrinterQueueWidget({ printerId, printerModel, printerState, plat
             {nextItem?.scheduled_time ? formatRelativeTime(nextItem.scheduled_time, 'system', t) : t('time.waiting')}
           </span>
           {totalPending > 1 && (
-            <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded">
-              +{totalPending - 1}
-            </span>
+            <span className="text-xs px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 rounded">+{totalPending - 1}</span>
           )}
           <ChevronRight className="w-4 h-4 text-bambu-gray" />
         </div>

@@ -2171,6 +2171,13 @@ function PrinterCard({
                 )}
                 {status?.connected ? t('printers.connection.connected') : t('printers.connection.offline')}
               </span>
+              {/* Auto-clear badge */}
+              {printer.auto_clear_plate && (
+                <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-500 font-medium">
+                  <Zap className="w-3 h-3" />
+                  Auto
+                </span>
+              )}
               {/* WiFi signal strength indicator */}
               {status?.connected && wifiSignal != null && (
                 <span
@@ -2461,7 +2468,13 @@ function PrinterCard({
                 </div>
 
                 {/* Queue Widget - always visible when there are pending items */}
-                <PrinterQueueWidget printerId={printer.id} printerModel={printer.model} printerState={status.state} plateCleared={status.plate_cleared} />
+                <PrinterQueueWidget
+                  printerId={printer.id}
+                  printerModel={printer.model}
+                  printerState={status.state}
+                  plateCleared={status.plate_cleared}
+                  autoClearEnabled={printer.auto_clear_plate}
+                />
               </>
             )}
 
