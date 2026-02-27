@@ -58,6 +58,34 @@ class PrintScheduler:
     async def check_queue(self):
         """Check for prints ready to start."""
         async with async_session() as db:
+            # --- AUTO-CLEAR LOGIC ---
+            # Check all connected printers for auto-clear status
+            # If a printer is finished and has auto_clear_plate=True, mark it as cleared automatically.
+            try:
+                # Get all active printers to check their auto-clear setting
+                result = await db.execute(select(Printer).where(Printer.is_active == True))  # noqa: E712
+                active_printers = result.scalars().all()
+                
+                for printer in active_printers:
+                    if not printer_manager.is_connected(printer.id):
+                        continue
+                        
+                    state = printer_manager.get_status(printer.id)
+                    if not state:
+                        continue
+
+                    # If printer is in FINISH or FAILED state and auto-clear is enabled
+                    if state.state in ("FINISH", "FAILED") and printer.auto_clear_plate:
+                        if not printer_manager.is_plate_cleared(printer.id):
+                            logger.info(
+                                "Auto-clear: Printer %s (%s) is in state %s. Auto-clearing plate.",
+                                printer.id, printer.name, state.state
+                            )
+                            printer_manager.set_plate_cleared(printer.id)
+            except Exception as e:
+                logger.error("Error in auto-clear logic: %s", e)
+            # ------------------------
+
             # Get all pending items, ordered by printer and position
             result = await db.execute(
                 select(PrintQueueItem)
@@ -91,6 +119,14 @@ class PrintScheduler:
                     # Specific printer assignment (existing behavior)
                     if item.printer_id in busy_printers:
                         continue
+
+                    # --- DOUBLE PRINT PROTECTION ---
+                    # Check if printer is already printing something in the DB
+                    if await self._is_printer_printing_in_db(db, item.printer_id):
+                        logger.warning("Skipping assignment for printer %s - already printing in DB", item.printer_id)
+                        busy_printers.add(item.printer_id)
+                        continue
+                    # -------------------------------
 
                     # Check if printer is idle
                     printer_idle = self._is_printer_idle(item.printer_id)
@@ -247,6 +283,16 @@ class PrintScheduler:
                         await self._start_print(db, item)
                         busy_printers.add(printer_id)
 
+    async def _is_printer_printing_in_db(self, db: AsyncSession, printer_id: int) -> bool:
+        """Check if a printer has an active print job in the database."""
+        result = await db.execute(
+            select(PrintQueueItem)
+            .where(PrintQueueItem.printer_id == printer_id)
+            .where(PrintQueueItem.status == "printing")
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
     async def _find_idle_printer_for_model(
         self,
         db: AsyncSession,
@@ -300,6 +346,14 @@ class PrintScheduler:
             if printer.id in exclude_ids:
                 printers_busy.append(printer.name)
                 continue
+
+            # --- DOUBLE PRINT PROTECTION ---
+            # Check DB state first - if printer is 'printing' in DB, skip it
+            if await self._is_printer_printing_in_db(db, printer.id):
+                logger.debug("Skipping printer %s (%s) - already printing in DB", printer.id, printer.name)
+                printers_busy.append(printer.name)
+                continue
+            # -------------------------------
 
             is_connected = printer_manager.is_connected(printer.id)
             is_idle = self._is_printer_idle(printer.id) if is_connected else False
